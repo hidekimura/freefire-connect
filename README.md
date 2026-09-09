@@ -2,63 +2,63 @@
 
 # freefire-connect
 
-**Minimal, dependency-light Python client that logs a Free Fire *guest* account in and keeps it online — nothing else.**
+**Cliente Python mínimo e com poucas dependências que loga uma conta *guest* do Free Fire e mantém ela online — só isso.**
 
-No room creation. No match logic. No gameplay. Just the connection.
+Sem criação de sala. Sem lógica de partida. Sem gameplay. Só a conexão.
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue?logo=python&logoColor=white)](https://www.python.org/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![No .env](https://img.shields.io/badge/config-none%20(no%20.env)-orange)](#usage)
+[![Licença: MIT](https://img.shields.io/badge/licença-MIT-green.svg)](LICENSE)
+[![Sem .env](https://img.shields.io/badge/config-nenhuma%20(sem%20.env)-orange)](#uso)
 
 </div>
 
 ---
 
-## How it works
+## Como funciona
 
-It reproduces the same handshake the mobile client does on boot:
+Reproduz o mesmo handshake que o app mobile faz ao abrir:
 
 ```mermaid
 flowchart LR
-    A["Guest OAuth\nuid + password"] --> B["MajorLogin\ndevice fingerprint + token"]
-    B --> C["GetLoginData\ngame server address"]
-    C --> D["TCP connect\n+ session envelope"]
-    D --> E(("Online\nheartbeat loop"))
+    A["Guest OAuth\nuid + senha"] --> B["MajorLogin\nfingerprint do device + token"]
+    B --> C["GetLoginData\nendereço do servidor do jogo"]
+    C --> D["Conexão TCP\n+ envelope de sessão"]
+    D --> E(("Online\nloop de heartbeat"))
 ```
 
-| Step | What happens |
+| Etapa | O que acontece |
 |---|---|
-| `_guest_oauth` | `POST 100067.connect.garena.com/oauth/guest/token/grant` with the guest uid/password → `access_token` + `open_id`. |
-| `_major_login` | Builds a `MajorLoginReq` (device fingerprint + the OAuth token), encrypts it with the client's fixed AES envelope key, and `POST`s it to the login backend → a per-session AES key/IV and a session JWT. |
-| `_get_login_data` | Exchanges the JWT for the game server's address (`Online_IP_Port`). |
-| `connect` | Opens a plain TCP socket to that address and sends a small handshake envelope built from the JWT + per-session key. |
-| `keep_alive` | Reads the socket; if the server goes quiet for a while, sends a heartbeat so the session isn't dropped. |
+| `_guest_oauth` | `POST 100067.connect.garena.com/oauth/guest/token/grant` com o uid/senha da conta guest → `access_token` + `open_id`. |
+| `_major_login` | Monta um `MajorLoginReq` (fingerprint do device + o token do OAuth), criptografa com a chave AES fixa do envelope do cliente, e manda via `POST` pro backend de login → devolve uma chave/IV AES por sessão e um JWT de sessão. |
+| `_get_login_data` | Troca o JWT pelo endereço do servidor do jogo (`Online_IP_Port`). |
+| `connect` | Abre um socket TCP puro pra esse endereço e manda um pequeno envelope de handshake montado a partir do JWT + chave da sessão. |
+| `keep_alive` | Lê o socket; se o servidor ficar quieto por um tempo, manda um heartbeat pra sessão não cair. |
 
-## Why this exists
+## Por que isso existe
 
-This is the shared first step any Free Fire automation/bot project needs — getting (and keeping) a session online — split out on its own so it can be read, audited, or reused without pulling in an entire bot's worth of unrelated code (rooms, payments, Discord integration, etc).
+Esse é o primeiro passo em comum que qualquer projeto de automação/bot de Free Fire precisa — conseguir (e manter) uma sessão online — separado por si só pra poder ser lido, auditado ou reaproveitado sem precisar puxar um bot inteiro cheio de código sem relação (salas, pagamentos, integração com Discord, etc).
 
-## Requirements
+## Requisitos
 
 - Python 3.10+
-- A Free Fire **guest** account (`uid` + `password`). This project does not create guest accounts for you — it only logs one in.
+- Uma conta **guest** do Free Fire (`uid` + `senha`). Este projeto não cria contas guest pra você — ele só faz login numa que já existe.
 
 ```bash
 pip install -r requirements.txt
 ```
 
-## Usage
+## Uso
 
-No `.env`, no config file — pass credentials as arguments (you'll be prompted for the password if you leave it out):
+Sem `.env`, sem arquivo de config — as credenciais são passadas por argumento (se você deixar a senha de fora, ela é pedida na hora):
 
 ```bash
-python main.py <uid> <password>
-python main.py <uid> <password> --seconds 120   # stay online longer
-python main.py <uid>                            # prompts for the password
+python main.py <uid> <senha>
+python main.py <uid> <senha> --seconds 120   # fica online por mais tempo
+python main.py <uid>                         # pede a senha no prompt
 ```
 
 <details>
-<summary><strong>Example output</strong></summary>
+<summary><strong>Exemplo de saída</strong></summary>
 
 ```
 [login] authenticating uid=123456789 ...
@@ -70,7 +70,7 @@ python main.py <uid>                            # prompts for the password
 
 </details>
 
-## Using it as a library
+## Usando como biblioteca
 
 ```python
 import asyncio
@@ -87,23 +87,23 @@ async def main():
 asyncio.run(main())
 ```
 
-## Project layout
+## Estrutura do projeto
 
 ```
 freefire-connect/
-├── main.py                          CLI entrypoint
+├── main.py                          ponto de entrada da CLI
 └── ff_connect/
-    ├── client.py                    FreeFireClient — login + TCP session
-    ├── packets.py                   MajorLoginReq wire-format builder
-    ├── crypto.py                    AES envelope/packet encryption
-    └── protobufs/                   generated protobuf messages
+    ├── client.py                    FreeFireClient — login + sessão TCP
+    ├── packets.py                   montagem do MajorLoginReq (wire format)
+    ├── crypto.py                    criptografia AES do envelope/pacotes
+    └── protobufs/                   mensagens protobuf geradas
 ```
 
-## Disclaimer
+## Aviso
 
 > [!WARNING]
-> This talks to Free Fire's client-facing servers using a reverse-engineered version of the protocol the official mobile client speaks. It is **not** an official Garena/111 Dots Studio SDK and is **not affiliated** with them. Use it only against your own guest accounts — this may be against Garena's Terms of Service, and guest accounts used this way can be banned. Shared for research/educational purposes; you are responsible for how you use it.
+> Isso conversa com os servidores voltados ao cliente do Free Fire usando uma versão de engenharia reversa do protocolo que o app mobile oficial fala. **Não** é um SDK oficial da Garena/111 Dots Studio e **não tem afiliação** com eles. Use só contra suas próprias contas guest — isso pode ir contra os Termos de Serviço da Garena, e contas guest usadas assim podem ser banidas. Compartilhado pra fins de pesquisa/educacionais; você é responsável por como usa.
 
-## License
+## Licença
 
 [MIT](LICENSE)

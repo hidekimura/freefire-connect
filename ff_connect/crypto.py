@@ -1,13 +1,13 @@
-"""AES helpers used by the Free Fire login/session protocol.
+"""Funções AES usadas pelo protocolo de login/sessão do Free Fire.
 
-``ENVELOPE_KEY``/``ENVELOPE_IV`` are the fixed AES-CBC key/IV every client
-uses to wrap the very first ``MajorLogin`` request, before any per-session
-key exists yet. They are not secret to this project — they are baked into
-the mobile client itself and are the same for every player/account.
+``ENVELOPE_KEY``/``ENVELOPE_IV`` são a chave/IV AES-CBC fixas que todo
+cliente usa pra embrulhar a primeiríssima requisição ``MajorLogin``, antes
+de existir qualquer chave por sessão. Não são segredo deste projeto — vêm
+embutidas no próprio app mobile e são as mesmas pra qualquer jogador/conta.
 
-Once login succeeds, the server hands back a per-session key/IV (``chave``/
-``iv``) that ``encrypt_packet`` uses to encrypt every packet sent over the
-TCP game connection from then on.
+Depois que o login dá certo, o servidor devolve uma chave/IV por sessão
+(``chave``/``iv``) que ``encrypt_packet`` usa pra criptografar todo pacote
+mandado pela conexão TCP do jogo dali em diante.
 """
 
 from Crypto.Cipher import AES
@@ -18,7 +18,7 @@ ENVELOPE_IV = bytes([54, 111, 121, 90, 68, 114, 50, 50, 69, 51, 121, 99, 104, 10
 
 
 def encrypt_envelope(data_hex: str) -> str:
-    """Encrypts the initial MajorLogin request with the fixed client key."""
+    """Criptografa a requisição inicial MajorLogin com a chave fixa do cliente."""
     data = bytes.fromhex(data_hex)
     cipher = AES.new(ENVELOPE_KEY, AES.MODE_CBC, ENVELOPE_IV)
     return cipher.encrypt(pad(data, AES.block_size)).hex()
@@ -31,7 +31,7 @@ def as_bytes(value) -> bytes:
 
 
 def encrypt_packet(plaintext, key, iv) -> str:
-    """Encrypts a packet body with the per-session key/IV (hex string in, hex string out)."""
+    """Criptografa o corpo de um pacote com a chave/IV da sessão (entra hex, sai hex)."""
     if isinstance(plaintext, str):
         plaintext = bytes.fromhex(plaintext)
     key = as_bytes(key)

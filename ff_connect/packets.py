@@ -1,8 +1,8 @@
-"""Minimal protobuf wire-format encoding + the MajorLogin request builder.
+"""Codificação mínima do wire-format do protobuf + montagem do MajorLogin.
 
-Only what's needed to build the ``MajorLoginReq`` payload is implemented
-here (varint/string/int field encoding) - this is not a general protobuf
-library, just enough to reproduce what the mobile client sends on login.
+Só o necessário pra montar o payload do ``MajorLoginReq`` está implementado
+aqui (codificação de campos varint/string/int) - não é uma lib de protobuf
+genérica, só o suficiente pra reproduzir o que o app mobile manda no login.
 """
 
 import random
@@ -10,7 +10,7 @@ import time
 import uuid
 from datetime import datetime
 
-GAME_VERSION = "1.126.1"  # bump if the handshake starts getting rejected
+GAME_VERSION = "1.126.1"  # atualize se o handshake começar a ser recusado
 
 _DEVICES = [
     ("samsung SM-M526B", "Adreno (TM) 642L", "Android OS 13 / API-33 (TP1A.220624.014/M526BXXS7CYD2)"),
@@ -48,8 +48,8 @@ def encode_bytes(field_num: int, value: bytes) -> bytes:
 
 
 def build_major_login_packet(open_id: str, access_token: str, client_ip: str, uid) -> bytes:
-    """Builds the MajorLoginReq body (still needs AES envelope encryption
-    with ``crypto.encrypt_envelope`` before it's sent over HTTP)."""
+    """Monta o corpo do MajorLoginReq (ainda precisa da criptografia de
+    envelope com ``crypto.encrypt_envelope`` antes de mandar via HTTP)."""
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     rng = random.Random(str(uid))
     device, gpu, os_str = rng.choice(_DEVICES)

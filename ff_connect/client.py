@@ -1,22 +1,22 @@
-"""FreeFireClient: guest login + the raw TCP session with the game server.
+"""FreeFireClient: login guest + a sessão TCP crua com o servidor do jogo.
 
-Flow (mirrors what the mobile client does on boot):
+Fluxo (espelha o que o app mobile faz ao abrir):
 
-1. ``_guest_oauth``      OAuth "guest" grant -> access_token + open_id
+1. ``_guest_oauth``      OAuth "guest" -> access_token + open_id
                          (POST 100067.connect.garena.com/oauth/guest/token/grant)
-2. ``_major_login``      Build+encrypt a MajorLoginReq, POST it to the login
-                         backend -> per-session AES key/IV + a JWT session token
+2. ``_major_login``      Monta+criptografa um MajorLoginReq, manda via POST pro
+                         backend de login -> chave/IV AES por sessão + JWT
                          (POST loginbp.ggwhitehawk.com/MajorLogin)
-3. ``_get_login_data``   Exchange the JWT for the game server address
+3. ``_get_login_data``   Troca o JWT pelo endereço do servidor do jogo
                          (POST client.us.freefiremobile.com/GetLoginData)
-4. ``connect``           Open the raw TCP socket to that address and send the
-                         session envelope built from the JWT + per-session key
-5. ``keep_alive``        Read the socket and answer with a heartbeat whenever
-                         the server goes quiet, so the session stays online.
+4. ``connect``           Abre o socket TCP puro pra esse endereço e manda o
+                         envelope de sessão montado a partir do JWT + chave
+5. ``keep_alive``        Lê o socket e responde com heartbeat sempre que o
+                         servidor fica quieto, pra sessão continuar online.
 
-Nothing here creates a room, joins a match, or touches gameplay - it only
-gets (and keeps) a session online, which is the shared foundation any of
-that would be built on top of.
+Nada aqui cria sala, entra em partida ou mexe em gameplay - só consegue (e
+mantém) uma sessão online, que é a base compartilhada de qualquer coisa que
+seria construída em cima disso.
 """
 
 import asyncio
@@ -41,7 +41,7 @@ OAUTH_CLIENT_ID = "100067"
 
 _HEARTBEAT = bytes.fromhex("0205")
 
-# account_id hex length -> zero padding needed so header stays 16 hex chars.
+# comprimento hex do account_id -> zeros de padding pro header ficar com 16 chars.
 _PADDING_BY_HEX_LEN = {7: "000000000", 8: "00000000", 9: "0000000", 10: "000000"}
 
 
@@ -68,9 +68,9 @@ class FreeFireClient:
         self.session: aiohttp.ClientSession | None = None
         self.account_id: int | None = None
         self.nickname: str | None = None
-        self.token: str | None = None  # session JWT
-        self.chave = None  # per-session AES key (hex)
-        self.iv = None  # per-session AES IV (hex)
+        self.token: str | None = None  # JWT da sessão
+        self.chave = None  # chave AES por sessão (hex)
+        self.iv = None  # IV AES por sessão (hex)
         self._session_envelope: bytes | None = None
 
         self.main_ip = None
@@ -91,7 +91,7 @@ class FreeFireClient:
         if self.session:
             await self.session.close()
 
-    # -- step 1: guest OAuth -------------------------------------------------
+    # -- etapa 1: guest OAuth -------------------------------------------------
 
     async def _guest_oauth(self):
         headers = {
@@ -119,7 +119,7 @@ class FreeFireClient:
                 raise LoginError("guest oauth: resposta sem access_token/open_id")
             return access_token, open_id
 
-    # -- step 2: MajorLogin ---------------------------------------------------
+    # -- etapa 2: MajorLogin ---------------------------------------------------
 
     async def _major_login(self, access_token: str, open_id: str):
         proto = build_major_login_packet(open_id, access_token, self.client_ip, self.uid)
@@ -142,10 +142,10 @@ class FreeFireClient:
         res = trick_pb2.MajorLoginRes()
         res.ParseFromString(body)
         if res.blacklist and (res.blacklist.ban_reason or res.blacklist.ban_time):
-            kind = "temporary" if res.blacklist.expire_duration > 0 else "permanent"
-            raise LoginError(f"account banned ({kind}, code={res.blacklist.ban_reason})")
+            tipo = "temporário" if res.blacklist.expire_duration > 0 else "permanente"
+            raise LoginError(f"conta banida ({tipo}, código={res.blacklist.ban_reason})")
         if not res.token:
-            raise LoginError("major login: no session token in response")
+            raise LoginError("major login: resposta sem token de sessão")
 
         ts = Timestamp()
         ts.FromNanoseconds(res.kts)
@@ -154,7 +154,7 @@ class FreeFireClient:
         iv = res.aiv.hex() if isinstance(res.aiv, bytes) else res.aiv
         return timestamp, chave, iv, res.token
 
-    # -- step 3: GetLoginData ---------------------------------------------------
+    # -- etapa 3: GetLoginData ---------------------------------------------------
 
     async def _get_login_data(self, token_jwt: str, payload: bytes):
         headers = {
@@ -179,11 +179,11 @@ class FreeFireClient:
         ip, porta = proto.AccountIP_Port.split(":")
         return ip, porta, online_ip, online_porta, proto.AccountName
 
-    # -- orchestration ---------------------------------------------------------
+    # -- orquestração ---------------------------------------------------------
 
     async def login(self) -> bool:
-        """Runs the full guest-login handshake. Returns True and fills in
-        ``account_id``/``nickname``/``online_ip``/``online_porta`` on success."""
+        """Roda o handshake completo de login guest. Retorna True e preenche
+        ``account_id``/``nickname``/``online_ip``/``online_porta`` se der certo."""
         access_token, open_id = await self._guest_oauth()
         timestamp, chave, iv, token_jwt = await self._major_login(access_token, open_id)
 
@@ -206,13 +206,13 @@ class FreeFireClient:
 
     @staticmethod
     def _build_session_envelope(account_id: int, timestamp: int, token_jwt: str, chave, iv) -> bytes:
-        """The handshake packet sent right after opening the TCP socket:
-        a small header (account id + timestamp) followed by the AES-CBC
-        encrypted session token, framed for the game server to parse.
+        """O pacote de handshake mandado logo após abrir o socket TCP: um
+        header pequeno (account id + timestamp) seguido do token de sessão
+        criptografado em AES-CBC, no formato que o servidor do jogo espera.
 
-        The account id is right-padded with zeros to a fixed 16 hex-char
-        (8 byte) width - ``_PADDING_BY_HEX_LEN`` covers the hex lengths an
-        account id can realistically have.
+        O account id é preenchido com zeros à esquerda até fechar em 16
+        chars hex (8 bytes) - ``_PADDING_BY_HEX_LEN`` cobre os tamanhos hex
+        que um account id pode ter na prática.
         """
         account_hex = hex(account_id)[2:]
         timestamp_hex = int_to_hex(timestamp)
@@ -224,11 +224,11 @@ class FreeFireClient:
         header = f"0115{padding}{account_hex}{timestamp_hex}00000{length_hex}"
         return bytes.fromhex(header + encrypted_token)
 
-    # -- TCP session -------------------------------------------------------
+    # -- sessão TCP -------------------------------------------------------
 
     async def connect(self, timeout: float = 15) -> None:
         if not self._session_envelope:
-            raise RuntimeError("call login() before connect()")
+            raise RuntimeError("chame login() antes de connect()")
         self._reader, self._writer = await asyncio.wait_for(
             asyncio.open_connection(self.online_ip, int(self.online_porta)), timeout=timeout
         )
@@ -250,11 +250,11 @@ class FreeFireClient:
             return False
 
     async def keep_alive(self, seconds: float, on_data=None) -> None:
-        """Reads the socket for ``seconds``, replying with a heartbeat any
-        time the server goes quiet for a while, so the session doesn't drop.
-        Pass ``on_data(bytes)`` to inspect incoming packets."""
+        """Lê o socket por ``seconds`` segundos, respondendo com heartbeat
+        toda vez que o servidor fica quieto por um tempo, pra sessão não
+        cair. Passe ``on_data(bytes)`` pra inspecionar os pacotes recebidos."""
         if not self._reader:
-            raise RuntimeError("call connect() before keep_alive()")
+            raise RuntimeError("chame connect() antes de keep_alive()")
         deadline = time.monotonic() + seconds
         while self._running and time.monotonic() < deadline:
             try:
