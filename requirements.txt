@@ -1,0 +1,4 @@
+aiohttp>=3.8.0
+pycryptodome>=3.19.0
+PyJWT>=2.8.0
+protobuf>=4.24.0
